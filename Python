@@ -1,0 +1,159 @@
+'''
+Automatin script which accepts time interval from user and create log file in that 
+Marellous directory wich contains information of all running processes.
+After creating the log file send that log file through mail
+'''
+import urllib.request
+import urllib.error
+import psutil
+import time 
+from sys import *
+import os
+import schedule
+import urllib.error
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.mime.text import MIMEText 
+from email import encoders
+
+
+
+def is_Connected():
+    try:
+        urllib.request.urlopen('https://www.google.co.in/', timeout=1)
+        return True
+    except urllib.error.URLError as e:
+        return False
+
+
+def MailSender(FileName,time):
+    try:
+        fromaddr = "vs3325405@gmail.com"
+        toaddr = "shindevaibhav434@gmail.com"
+
+        msg = MIMEMultipart()
+
+        msg['From'] = fromaddr
+
+        msg['To'] = toaddr
+
+        body = """
+        Hello %s , Welcome .
+        Please find attached document which contains Log of Running Process.
+        Log file is created at : %s
+
+        This is auto generated mail.
+
+        Thanks & Regards,
+        Vaibhav Shinde.
+        """%(toaddr,time)
+
+        Subject = """
+        Process log generated at : %s"""%(time)
+
+        msg['Subject'] = Subject
+
+        msg.attach(MIMEText(body,'plain'))
+
+        attachment = open(FileName,"rb")
+
+        p = MIMEBase('application','octal-stream')
+
+        p.set_payload((attachment).read())
+
+        encoders.encode_base64(p)
+
+        p.add_header('Content-Disposition' , "attachment;filename = %s"%FileName)
+
+        msg.attach(p)
+
+        s = smtplib.SMTP('smtp.gmail.com',587)
+
+        s.starttls()
+
+        s.login(fromaddr,"vs3325405@gmail.com")
+
+        text = msg.as_string()
+
+        s.sendmail(fromaddr,toaddr,text)
+
+        s.quit()
+
+        print("Log file sucessfully sent through Mail")
+
+    except Exception as E:
+        print("Unable to send mail ",E)
+
+def GetProcessInfo():
+    procecessList= []
+
+    #for proc in psutil.process_iter(['pid','name','username']):
+    #    procecessList.append(proc.info)
+
+    for proc in psutil.process_iter():
+        try:
+            pinfo = proc.as_dict(attrs = ['pid','name','username'])
+            vms = proc.memory_info().vms / (1024*1024)
+            pinfo['vms'] = vms
+            procecessList.append(pinfo)
+
+        except (psutil.NoSuchProcess,psutil.AccessDenied,psutil.ZombieProcess):
+            pass
+
+    return procecessList
+
+def CreateLog(FolderName = "LogData"):
+    if not os.path.exists(FolderName):
+        os.mkdir(FolderName)
+
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    FileName = os.path.join(FolderName,"Process"+"_"+timestamp+".log")
+
+    cf = open(FileName,"w")
+
+    seperator = "_"*70
+
+    cf.write(seperator + "\n")
+
+    cf.write("Running procecess data " + "\n")
+
+    cf.write("Log file created at " + time.ctime() + "\n")
+
+    Arr = GetProcessInfo()
+
+    cf.write(seperator + "\n")
+
+    for data in Arr:
+        cf.write("%s \n" %data)
+
+    print("Log File Successfully created at %s" %(FileName))
+
+    cf.write(seperator + "\n")
+
+    cf.close()
+
+    # connection with internet
+    connected = is_Connected()
+    if connected:
+        starttime = time.time()
+        MailSender(FileName,timestamp)
+        endtime = time.time()
+
+        print("Took %s seconds to send mail " %(endtime-starttime))
+    else:
+        print("There is no such internet connection")
+    
+
+
+def main():
+    
+    schedule.every(1).minutes.do(CreateLog)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+
+if __name__ == "__main__":
+    main()
